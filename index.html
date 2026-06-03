@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="記帳本">
+<meta name="theme-color" content="#F06292">
+<link rel="manifest" href="manifest.json">
+<title>記帳本</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --pink: #F06292;
+  --pink-light: #FCE4EC;
+  --pink-mid: #F48FB1;
+  --pink-dark: #C2185B;
+  --pink-bg: #FFF0F5;
+  --green: #4CAF50;
+  --red: #F44336;
+  --gray: #9E9E9E;
+  --gray-light: #F5F5F5;
+  --white: #FFFFFF;
+  --text: #333333;
+  --text-sub: #888888;
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 4px 20px rgba(240,98,146,0.15);
+  --shadow-sm: 0 2px 10px rgba(0,0,0,0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; font-family: 'Noto Sans TC', sans-serif; background: var(--gray-light); color: var(--text); }
+#app { height: 100dvh; display: flex; flex-direction: column; max-width: 430px; margin: 0 auto; position: relative; background: var(--gray-light); overflow: hidden; }
+
+/* ── SCREENS ── */
+.screen { display: none; flex-direction: column; height: 100%; overflow: hidden; }
+.screen.active { display: flex; }
+
+/* ── TOP BAR ── */
+.topbar {
+  background: linear-gradient(135deg, var(--pink) 0%, #E91E63 100%);
+  color: white; padding: 12px 16px 16px;
+  flex-shrink: 0;
+}
+.topbar-row { display: flex; align-items: center; justify-content: space-between; }
+.topbar h1 { font-size: 18px; font-weight: 700; }
+.topbar-btn { background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 20px; padding: 6px 14px; font-size: 13px; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.month-nav { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.month-nav button { background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 0 4px; }
+.month-nav span { font-size: 16px; font-weight: 700; flex: 1; text-align: center; }
+.summary-row { display: flex; gap: 8px; margin-top: 12px; }
+.summary-card { flex: 1; background: rgba(255,255,255,0.18); border-radius: 14px; padding: 10px; text-align: center; }
+.summary-card .label { font-size: 11px; opacity: 0.85; margin-bottom: 4px; }
+.summary-card .val { font-size: 18px; font-weight: 700; }
+.summary-card .val.green { color: #B9F6CA; }
+.summary-card .val.red { color: #FFCDD2; }
+.summary-card .val.white { color: white; }
+
+/* ── SCROLL AREA ── */
+.scroll-area { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 14px 80px; }
+.scroll-area::-webkit-scrollbar { display: none; }
+
+/* ── SECTION LABEL ── */
+.section-label { font-size: 13px; font-weight: 700; color: var(--pink-dark); margin: 14px 2px 8px; display: flex; align-items: center; gap: 6px; }
+.section-label::before { content: '▼'; font-size: 10px; color: var(--pink); }
+
+/* ── DATE GROUP ── */
+.date-group { background: white; border-radius: var(--radius); margin-bottom: 10px; overflow: hidden; box-shadow: var(--shadow-sm); }
+.date-header { padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #FFF0F5; background: #FAFAFA; }
+.date-header .date-text { font-size: 13px; font-weight: 600; color: var(--text-sub); }
+.date-header .date-sum { font-size: 13px; font-weight: 600; color: var(--red); }
+.tx-item { display: flex; align-items: center; padding: 12px 14px; gap: 12px; transition: background 0.15s; cursor: pointer; border-bottom: 1px solid #FFF8FB; }
+.tx-item:last-child { border-bottom: none; }
+.tx-item:active { background: var(--pink-light); }
+.tx-icon { width: 44px; height: 44px; border-radius: 50%; background: var(--pink-light); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.tx-info { flex: 1; }
+.tx-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.tx-sub { font-size: 12px; color: var(--text-sub); margin-top: 2px; }
+.tx-right { text-align: right; }
+.tx-amount { font-size: 16px; font-weight: 700; }
+.tx-amount.expense { color: var(--red); }
+.tx-amount.income { color: var(--green); }
+.tx-acc { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
+
+/* ── BOTTOM NAV ── */
+.bottom-nav {
+  display: flex; background: white; border-top: 1px solid #FFE0EC;
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  flex-shrink: 0; position: relative; z-index: 10;
+  box-shadow: 0 -4px 20px rgba(240,98,146,0.1);
+}
+.nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding: 4px 0; transition: all 0.2s; }
+.nav-icon { font-size: 22px; }
+.nav-label { font-size: 11px; color: var(--gray); font-weight: 500; }
+.nav-item.active .nav-label { color: var(--pink); }
+.nav-item.active .nav-icon { filter: none; }
+
+/* ── FAB ── */
+.fab {
+  position: absolute; bottom: calc(60px + env(safe-area-inset-bottom) + 10px); right: 18px;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--pink), var(--pink-dark));
+  color: white; font-size: 28px; border: none; cursor: pointer;
+  box-shadow: 0 6px 20px rgba(240,98,146,0.5); z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s;
+}
+.fab:active { transform: scale(0.92); }
+
+/* ── MODAL OVERLAY ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  z-index: 100; align-items: flex-end; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-sheet {
+  background: white; width: 100%; max-width: 430px; border-radius: 28px 28px 0 0;
+  max-height: 95dvh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: slideUp 0.3s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-handle { width: 40px; height: 4px; background: #E0E0E0; border-radius: 2px; margin: 12px auto 0; }
+
+/* ── ADD FORM ── */
+.add-header { padding: 16px 20px 10px; display: flex; align-items: center; justify-content: space-between; }
+.add-header h2 { font-size: 18px; font-weight: 700; }
+.type-tabs { display: flex; gap: 0; margin: 0 16px 14px; background: var(--gray-light); border-radius: 12px; padding: 4px; }
+.type-tab { flex: 1; padding: 8px 0; text-align: center; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; color: var(--text-sub); }
+.type-tab.active-expense { background: var(--pink); color: white; box-shadow: 0 2px 8px rgba(240,98,146,0.4); }
+.type-tab.active-income { background: var(--green); color: white; box-shadow: 0 2px 8px rgba(76,175,80,0.4); }
+.amount-display { text-align: center; padding: 10px 20px 14px; font-size: 42px; font-weight: 700; color: var(--text); min-height: 70px; letter-spacing: -1px; }
+.amount-display.has-amount { color: var(--pink-dark); }
+
+.cat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 16px 16px; }
+.cat-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; padding: 10px 6px; border-radius: 14px; transition: all 0.2s; background: none; border: 2px solid transparent; }
+.cat-btn:active { background: var(--pink-light); }
+.cat-btn.selected { background: var(--pink-light); border-color: var(--pink); }
+.cat-btn .cat-emoji { font-size: 26px; }
+.cat-btn .cat-name { font-size: 12px; font-weight: 500; color: var(--text); }
+
+.note-row { padding: 0 16px 12px; }
+.note-input { width: 100%; padding: 12px 16px; border: 1.5px solid #F8BBD9; border-radius: 12px; font-family: inherit; font-size: 14px; color: var(--text); background: #FFF8FB; outline: none; }
+.note-input:focus { border-color: var(--pink); }
+
+.date-row { padding: 0 16px 16px; display: flex; align-items: center; gap: 10px; }
+.date-row label { font-size: 14px; color: var(--text-sub); font-weight: 500; }
+.date-input { flex: 1; padding: 10px 14px; border: 1.5px solid #F8BBD9; border-radius: 12px; font-family: inherit; font-size: 14px; color: var(--text); background: #FFF8FB; outline: none; }
+.date-input:focus { border-color: var(--pink); }
+
+/* ── NUMPAD ── */
+.numpad { background: #FCE4EC; border-radius: 0; padding: 12px 16px 16px; }
+.numpad-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.numpad-btn {
+  background: white; border: none; border-radius: 14px; padding: 16px 8px;
+  font-size: 18px; font-weight: 600; color: var(--text); cursor: pointer;
+  font-family: inherit; transition: all 0.15s; box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+.numpad-btn:active { transform: scale(0.93); background: #F8BBD9; }
+.numpad-btn.op { background: #F8BBD9; color: var(--pink-dark); }
+.numpad-btn.confirm-btn { background: var(--pink); color: white; box-shadow: 0 3px 10px rgba(240,98,146,0.4); }
+.numpad-btn.del-btn { background: #FFB3C6; color: var(--pink-dark); }
+.numpad-btn.today-btn { background: #B2EBF2; color: #00838F; font-size: 13px; }
+
+/* ── CHART SCREEN ── */
+.chart-topbar { background: linear-gradient(135deg, var(--pink) 0%, #E91E63 100%); color: white; padding: 12px 16px 16px; flex-shrink: 0; }
+.chart-topbar h1 { font-size: 18px; font-weight: 700; text-align: center; margin-bottom: 10px; }
+.chart-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.chart-tabs::-webkit-scrollbar { display: none; }
+.chart-tab { padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; color: rgba(255,255,255,0.7); border: 1.5px solid rgba(255,255,255,0.3); background: transparent; font-family: inherit; }
+.chart-tab.active { background: white; color: var(--pink-dark); border-color: white; }
+
+.donut-wrap { background: white; border-radius: var(--radius); margin: 14px 14px 0; padding: 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; align-items: center; }
+.donut-title { font-size: 14px; color: var(--text-sub); margin-bottom: 4px; }
+.donut-amount { font-size: 22px; font-weight: 700; color: var(--pink-dark); margin-bottom: 16px; }
+.donut-container { position: relative; width: 200px; height: 200px; }
+.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.donut-center-label { font-size: 12px; color: var(--text-sub); }
+.donut-center-val { font-size: 18px; font-weight: 700; color: var(--pink-dark); }
+
+.cat-list { background: white; border-radius: var(--radius); margin: 10px 14px 0; overflow: hidden; box-shadow: var(--shadow-sm); }
+.cat-list-item { display: flex; align-items: center; padding: 12px 16px; gap: 12px; border-bottom: 1px solid #FFF0F5; }
+.cat-list-item:last-child { border-bottom: none; }
+.cat-list-icon { font-size: 24px; width: 38px; text-align: center; }
+.cat-list-name { flex: 1; font-size: 15px; font-weight: 600; }
+.cat-list-pct { font-size: 13px; color: var(--text-sub); width: 36px; text-align: right; }
+.cat-list-amt { font-size: 15px; font-weight: 700; color: var(--pink-dark); width: 72px; text-align: right; }
+
+/* ── CALENDAR SCREEN ── */
+.cal-wrap { background: white; border-radius: var(--radius); margin: 14px 14px 0; box-shadow: var(--shadow-sm); overflow: hidden; }
+.cal-header { padding: 14px 16px 10px; display: flex; align-items: center; justify-content: space-between; }
+.cal-header button { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--pink); padding: 0 6px; }
+.cal-header span { font-size: 16px; font-weight: 700; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 0 10px 12px; }
+.cal-dow { text-align: center; font-size: 12px; font-weight: 600; padding: 4px 0 8px; color: var(--text-sub); }
+.cal-dow:first-child, .cal-dow:last-child { color: var(--red); }
+.cal-day { text-align: center; padding: 3px 1px 5px; border-radius: 10px; cursor: pointer; min-height: 44px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.cal-day:active { background: var(--pink-light); }
+.cal-day.today { background: var(--pink); border-radius: 50% 50% 10px 10px; }
+.cal-day.today .day-num { color: white; font-weight: 700; }
+.cal-day.other-month .day-num { color: #CCC; }
+.cal-day .day-num { font-size: 14px; font-weight: 500; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+.cal-day.sun .day-num, .cal-day.sat .day-num { color: var(--red); }
+.day-dot { font-size: 10px; font-weight: 700; color: var(--red); line-height: 1; }
+.day-dot.income { color: var(--green); }
+
+.cal-summary { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid #FFF0F5; }
+.cal-sum-item { flex: 1; text-align: center; }
+.cal-sum-label { font-size: 12px; color: var(--text-sub); margin-bottom: 3px; }
+.cal-sum-val { font-size: 16px; font-weight: 700; }
+.cal-sum-val.red { color: var(--red); }
+.cal-sum-val.green { color: var(--green); }
+
+/* ── TREND CHART ── */
+.trend-wrap { background: white; border-radius: var(--radius); margin: 10px 14px 0; padding: 16px; box-shadow: var(--shadow-sm); }
+.trend-title { font-size: 14px; font-weight: 600; color: var(--text-sub); margin-bottom: 12px; }
+.trend-canvas-wrap { width: 100%; height: 180px; }
+
+.balance-list { background: white; border-radius: var(--radius); margin: 10px 14px 10px; overflow: hidden; box-shadow: var(--shadow-sm); }
+.balance-item { display: flex; align-items: center; padding: 12px 16px; gap: 12px; border-bottom: 1px solid #FFF0F5; }
+.balance-item:last-child { border-bottom: none; }
+.balance-date { font-size: 13px; color: var(--text-sub); width: 36px; }
+.balance-flow { flex: 1; font-size: 15px; font-weight: 600; }
+.balance-flow.positive { color: var(--green); }
+.balance-flow.negative { color: var(--red); }
+.balance-total { font-size: 15px; font-weight: 700; color: var(--green); }
+
+/* ── EMPTY STATE ── */
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text-sub); }
+.empty-state .emoji { font-size: 48px; margin-bottom: 12px; }
+.empty-state p { font-size: 15px; }
+
+/* ── CLOSE BTN ── */
+.close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-sub); padding: 4px; }
+.check-btn { background: var(--pink); border: none; color: white; border-radius: 50%; width: 34px; height: 34px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: calc(80px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(20px);
+  background: rgba(40,40,40,0.9); color: white; padding: 10px 22px; border-radius: 24px;
+  font-size: 14px; opacity: 0; transition: all 0.3s; z-index: 200; pointer-events: none; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── ANIMATIONS ── */
+.tx-item, .cat-list-item { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── TREND TOGGLE ── */
+.seg-control { display: flex; gap: 0; background: var(--gray-light); border-radius: 10px; padding: 3px; margin: 0 14px 0; }
+.seg-btn { flex: 1; padding: 7px 0; text-align: center; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-sub); background: none; border: none; font-family: inherit; transition: all 0.2s; }
+.seg-btn.active { background: white; color: var(--pink-dark); box-shadow: 0 1px 6px rgba(0,0,0,0.1); }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ════════════ SCREEN: HOME ════════════ -->
+<div class="screen active" id="screen-home">
+  <div class="topbar">
+    <div class="topbar-row">
+      <span style="font-size:22px;cursor:pointer">🔍</span>
+      <h1>💰 記帳本</h1>
+      <button class="topbar-btn" onclick="switchScreen('screen-cal')">📅 日曆</button>
+    </div>
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">‹</button>
+      <span id="month-label">2025年6月</span>
+      <button onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="summary-row">
+      <div class="summary-card">
+        <div class="label">總額</div>
+        <div class="val white" id="sum-total">$0</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">💚 收入</div>
+        <div class="val green" id="sum-income">$0</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">❤️ 支出</div>
+        <div class="val red" id="sum-expense">$0</div>
+      </div>
+    </div>
+  </div>
+  <div class="scroll-area" id="tx-list">
+    <div class="empty-state" id="empty-msg">
+      <div class="emoji">📝</div>
+      <p>還沒有記錄<br>點下方 + 新增第一筆！</p>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ SCREEN: CHART ════════════ -->
+<div class="screen" id="screen-chart">
+  <div class="chart-topbar">
+    <h1>圖表分析</h1>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <button onclick="changeMonth(-1)" style="background:none;border:none;color:white;font-size:20px;cursor:pointer">‹</button>
+      <span style="font-size:15px;font-weight:700" id="chart-month-label">2025年6月</span>
+      <button onclick="changeMonth(1)" style="background:none;border:none;color:white;font-size:20px;cursor:pointer">›</button>
+    </div>
+    <div class="chart-tabs">
+      <button class="chart-tab active" onclick="switchChartTab('expense')">🛒 支出分析</button>
+      <button class="chart-tab" onclick="switchChartTab('income')">💰 收入分析</button>
+      <button class="chart-tab" onclick="switchChartTab('trend')">📈 資產趨勢</button>
+    </div>
+  </div>
+  <div class="scroll-area" id="chart-content" style="padding-top:0"></div>
+</div>
+
+<!-- ════════════ SCREEN: CALENDAR ════════════ -->
+<div class="screen" id="screen-cal">
+  <div class="topbar">
+    <div class="topbar-row">
+      <button onclick="switchScreen('screen-home')" style="background:none;border:none;color:white;font-size:22px;cursor:pointer">‹</button>
+      <h1>日曆</h1>
+      <span style="width:36px"></span>
+    </div>
+  </div>
+  <div class="scroll-area" id="cal-content" style="padding:14px 14px 80px"></div>
+</div>
+
+<!-- ════════════ BOTTOM NAV ════════════ -->
+<nav class="bottom-nav">
+  <div class="nav-item active" id="nav-home" onclick="switchScreen('screen-home')">
+    <span class="nav-icon">📒</span>
+    <span class="nav-label">記帳本</span>
+  </div>
+  <div class="nav-item" id="nav-chart" onclick="switchScreen('screen-chart')">
+    <span class="nav-icon">🥧</span>
+    <span class="nav-label">圖表分析</span>
+  </div>
+  <div class="nav-item" id="nav-cal" onclick="switchScreen('screen-cal')">
+    <span class="nav-icon">📅</span>
+    <span class="nav-label">日曆</span>
+  </div>
+</nav>
+
+<button class="fab" onclick="openAddModal()">+</button>
+
+<!-- ════════════ ADD MODAL ════════════ -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal-sheet" id="add-sheet">
+    <div class="modal-handle"></div>
+    <div class="add-header">
+      <button class="close-btn" onclick="closeAddModal()">✕</button>
+      <h2 id="modal-title">新增記錄</h2>
+      <button class="check-btn" onclick="saveRecord()">✓</button>
+    </div>
+    <div class="type-tabs">
+      <div class="type-tab active-expense" id="tab-expense" onclick="setType('expense')">支出</div>
+      <div class="type-tab" id="tab-income" onclick="setType('income')">收入</div>
+      <div class="type-tab" id="tab-transfer" onclick="setType('transfer')">轉帳</div>
+    </div>
+    <div class="amount-display" id="amount-display">0</div>
+    <div class="section-label" style="padding:0 16px;margin-top:0">選擇類別</div>
+    <div class="cat-grid" id="cat-grid"></div>
+    <div class="note-row">
+      <input class="note-input" id="note-input" placeholder="備註（選填）" maxlength="50">
+    </div>
+    <div class="date-row">
+      <label>📅 日期</label>
+      <input class="date-input" type="date" id="date-input">
+    </div>
+    <div class="numpad">
+      <div class="numpad-grid">
+        <button class="numpad-btn today-btn" onclick="setToday()">TODAY</button>
+        <button class="numpad-btn" onclick="numInput('7')">7</button>
+        <button class="numpad-btn" onclick="numInput('8')">8</button>
+        <button class="numpad-btn" onclick="numInput('9')">9</button>
+        <button class="numpad-btn op" onclick="numInput('×')">×</button>
+        <button class="numpad-btn" onclick="numInput('4')">4</button>
+        <button class="numpad-btn" onclick="numInput('5')">5</button>
+        <button class="numpad-btn" onclick="numInput('6')">6</button>
+        <button class="numpad-btn op" onclick="numInput('÷')">÷</button>
+        <button class="numpad-btn" onclick="numInput('1')">1</button>
+        <button class="numpad-btn" onclick="numInput('2')">2</button>
+        <button class="numpad-btn" onclick="numInput('3')">3</button>
+        <button class="numpad-btn op" onclick="numInput('-')">-</button>
+        <button class="numpad-btn" onclick="numInput('.')">.</button>
+        <button class="numpad-btn" onclick="numInput('0')">0</button>
+        <button class="numpad-btn del-btn" onclick="numDelete()">⌫</button>
+        <button class="numpad-btn op" onclick="numInput('+')">+</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── DATA ──
+const CATS = {
+  expense: [
+    { id:'food',    name:'飲食',   emoji:'🍔' },
+    { id:'daily',   name:'日用',   emoji:'🌿' },
+    { id:'trans',   name:'交通',   emoji:'🚌' },
+    { id:'house',   name:'住房',   emoji:'🏠' },
+    { id:'social',  name:'社交',   emoji:'🥂' },
+    { id:'gift',    name:'禮物',   emoji:'🎁' },
+    { id:'comm',    name:'通信',   emoji:'📱' },
+    { id:'cloth',   name:'服飾',   emoji:'👗' },
+    { id:'entertain',name:'娛樂',  emoji:'🎮' },
+    { id:'beauty',  name:'美容',   emoji:'✂️' },
+    { id:'medical', name:'醫療',   emoji:'🏥' },
+    { id:'tax',     name:'稅金',   emoji:'💵' },
+  ],
+  income: [
+    { id:'salary',  name:'薪資',   emoji:'💼' },
+    { id:'bonus',   name:'獎金',   emoji:'🎉' },
+    { id:'invest',  name:'投資',   emoji:'📈' },
+    { id:'sidejob', name:'兼職',   emoji:'🔧' },
+    { id:'gift_in', name:'收禮',   emoji:'🎀' },
+    { id:'other',   name:'其他',   emoji:'💰' },
+  ],
+  transfer: [
+    { id:'bank',    name:'銀行',   emoji:'🏦' },
+    { id:'card',    name:'信用卡', emoji:'💳' },
+    { id:'cash',    name:'現金',   emoji:'💴' },
+    { id:'other',   name:'其他',   emoji:'🔄' },
+  ]
+};
+
+const CAT_COLORS = ['#F06292','#E91E63','#9C27B0','#673AB7','#3F51B5','#2196F3','#00BCD4','#009688','#4CAF50','#8BC34A','#FF9800','#FF5722'];
+
+let records = JSON.parse(localStorage.getItem('records') || '[]');
+let currentMonth = new Date().toISOString().slice(0,7); // YYYY-MM
+let addType = 'expense';
+let selectedCat = '';
+let amountStr = '';
+let editId = null;
+let chartTabActive = 'expense';
+let donutChart = null;
+let trendChart = null;
+
+// ── UTILS ──
+function saveData() { localStorage.setItem('records', JSON.stringify(records)); }
+function fmt(n) { return '$' + n.toLocaleString('en',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function fmtAbs(n) { return '$' + Math.abs(n).toLocaleString('en',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function getMonthRecords(ym) {
+  return records.filter(r => r.date.startsWith(ym));
+}
+
+function getMonthLabel(ym) {
+  const [y,m] = ym.split('-');
+  return `${y}年${parseInt(m)}月`;
+}
+
+// ── MONTH NAV ──
+function changeMonth(dir) {
+  const [y,m] = currentMonth.split('-').map(Number);
+  const d = new Date(y, m-1+dir, 1);
+  currentMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  renderHome(); renderChartContent(); renderCal();
+  document.getElementById('month-label').textContent = getMonthLabel(currentMonth);
+  document.getElementById('chart-month-label').textContent = getMonthLabel(currentMonth);
+}
+
+// ── SCREEN ──
+function switchScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (id==='screen-home') { document.getElementById('nav-home').classList.add('active'); renderHome(); }
+  if (id==='screen-chart') { document.getElementById('nav-chart').classList.add('active'); renderChartContent(); }
+  if (id==='screen-cal') { document.getElementById('nav-cal').classList.add('active'); renderCal(); }
+}
+
+// ── HOME ──
+function renderHome() {
+  const recs = getMonthRecords(currentMonth);
+  const income = recs.filter(r=>r.type==='income').reduce((a,r)=>a+r.amount,0);
+  const expense = recs.filter(r=>r.type==='expense').reduce((a,r)=>a+r.amount,0);
+  document.getElementById('sum-income').textContent = fmt(income);
+  document.getElementById('sum-expense').textContent = fmt(expense);
+  document.getElementById('sum-total').textContent = fmt(income - expense);
+
+  const list = document.getElementById('tx-list');
+  const empty = document.getElementById('empty-msg');
+  if (recs.length === 0) { empty.style.display=''; list.innerHTML=''; list.appendChild(empty); return; }
+  empty.style.display='none';
+
+  // group by date
+  const byDate = {};
+  recs.forEach(r => { (byDate[r.date] = byDate[r.date]||[]).push(r); });
+  const sorted = Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+
+  list.innerHTML = '';
+  sorted.forEach(date => {
+    const items = byDate[date];
+    const dayExp = items.filter(r=>r.type==='expense').reduce((a,r)=>a+r.amount,0);
+    const dayInc = items.filter(r=>r.type==='income').reduce((a,r)=>a+r.amount,0);
+    const [y,m,d] = date.split('-');
+    const wd = ['週日','週一','週二','週三','週四','週五','週六'][new Date(date).getDay()];
+    const grp = document.createElement('div'); grp.className='date-group';
+    let sumText = '';
+    if (dayExp > 0) sumText += `支出:${fmtAbs(dayExp)}`;
+    if (dayInc > 0) sumText += (sumText?' ':'')+`收入:${fmt(dayInc)}`;
+    grp.innerHTML = `<div class="date-header"><span class="date-text">${parseInt(m)}/${parseInt(d)}（${wd}）</span><span class="date-sum">${sumText}</span></div>`;
+    items.sort((a,b)=>b.id.localeCompare(a.id)).forEach(r => {
+      const cat = [...CATS.expense,...CATS.income,...CATS.transfer].find(c=>c.id===r.cat) || {emoji:'💰',name:r.cat};
+      const div = document.createElement('div'); div.className='tx-item';
+      div.innerHTML = `
+        <div class="tx-icon">${cat.emoji}</div>
+        <div class="tx-info">
+          <div class="tx-name">${cat.name}</div>
+          <div class="tx-sub">${r.note||'自己'}</div>
+        </div>
+        <div class="tx-right">
+          <div class="tx-amount ${r.type}">${r.type==='expense'?'-':'+'}${fmtAbs(r.amount)}</div>
+          <div class="tx-acc">預設帳戶</div>
+        </div>`;
+      div.onclick = () => openEditModal(r.id);
+      grp.appendChild(div);
+    });
+    list.appendChild(grp);
+  });
+}
+
+// ── ADD MODAL ──
+function openAddModal() {
+  editId = null;
+  amountStr = '';
+  selectedCat = '';
+  setType('expense');
+  document.getElementById('note-input').value = '';
+  document.getElementById('date-input').value = new Date().toISOString().slice(0,10);
+  updateAmountDisplay();
+  document.getElementById('add-modal').classList.add('open');
+  document.getElementById('modal-title').textContent = '新增記錄';
+}
+
+function openEditModal(id) {
+  const r = records.find(x=>x.id===id);
+  if (!r) return;
+  editId = id;
+  amountStr = String(r.amount);
+  selectedCat = r.cat;
+  setType(r.type);
+  document.getElementById('note-input').value = r.note||'';
+  document.getElementById('date-input').value = r.date;
+  updateAmountDisplay();
+  document.getElementById('add-modal').classList.add('open');
+  document.getElementById('modal-title').textContent = '編輯記錄';
+  renderCatGrid();
+}
+
+function closeAddModal() {
+  document.getElementById('add-modal').classList.remove('open');
+}
+
+function setType(t) {
+  addType = t;
+  ['expense','income','transfer'].forEach(x => {
+    const el = document.getElementById('tab-'+x);
+    el.className = 'type-tab';
+    if (x===t) el.className = 'type-tab active-'+t;
+  });
+  if (t!==addType || true) renderCatGrid();
+}
+
+function renderCatGrid() {
+  const grid = document.getElementById('cat-grid');
+  const cats = CATS[addType] || CATS.expense;
+  grid.innerHTML = cats.map(c => `
+    <button class="cat-btn ${c.id===selectedCat?'selected':''}" onclick="selectCat('${c.id}')">
+      <span class="cat-emoji">${c.emoji}</span>
+      <span class="cat-name">${c.name}</span>
+    </button>`).join('');
+}
+
+function selectCat(id) {
+  selectedCat = id;
+  renderCatGrid();
+}
+
+function updateAmountDisplay() {
+  const el = document.getElementById('amount-display');
+  const val = amountStr || '0';
+  el.textContent = val;
+  el.className = 'amount-display' + (amountStr ? ' has-amount' : '');
+}
+
+function numInput(ch) {
+  if (ch === '×') ch = '*';
+  if (ch === '÷') ch = '/';
+  if ('+-*/'.includes(ch)) { amountStr += ch; }
+  else if (ch === '.') { const parts = amountStr.split(/[+\-*/]/); const last = parts[parts.length-1]; if (!last.includes('.')) amountStr += ch; }
+  else { if (amountStr.length < 12) amountStr += ch; }
+  updateAmountDisplay();
+}
+
+function numDelete() {
+  amountStr = amountStr.slice(0,-1);
+  updateAmountDisplay();
+}
+
+function setToday() {
+  document.getElementById('date-input').value = new Date().toISOString().slice(0,10);
+  showToast('已設為今天');
+}
+
+function evalAmount(s) {
+  try {
+    const v = Function('"use strict"; return (' + s.replace(/[^0-9+\-*/.]/g,'') + ')')();
+    return isNaN(v) || v <= 0 ? null : Math.round(v*100)/100;
+  } catch { return null; }
+}
+
+function saveRecord() {
+  const amount = evalAmount(amountStr);
+  if (!amount) { showToast('請輸入金額'); return; }
+  if (!selectedCat) { showToast('請選擇類別'); return; }
+  const date = document.getElementById('date-input').value;
+  if (!date) { showToast('請選擇日期'); return; }
+
+  if (editId) {
+    const idx = records.findIndex(r=>r.id===editId);
+    if (idx>=0) records[idx] = {...records[idx], amount, cat:selectedCat, type:addType, date, note:document.getElementById('note-input').value};
+  } else {
+    records.push({ id: Date.now().toString(), amount, cat:selectedCat, type:addType, date, note:document.getElementById('note-input').value });
+  }
+  saveData(); closeAddModal(); renderHome();
+  showToast(editId ? '已更新' : '✅ 記錄已儲存');
+}
+
+// ── CHART ──
+function switchChartTab(tab) {
+  chartTabActive = tab;
+  document.querySelectorAll('.chart-tab').forEach((el,i) => {
+    el.classList.toggle('active', ['expense','income','trend'][i]===tab);
+  });
+  renderChartContent();
+}
+
+function renderChartContent() {
+  const container = document.getElementById('chart-content');
+  container.innerHTML = '';
+  if (chartTabActive === 'trend') { renderTrendChart(container); return; }
+  renderDonutChart(container);
+}
+
+function renderDonutChart(container) {
+  const recs = getMonthRecords(currentMonth).filter(r=>r.type===chartTabActive);
+  const total = recs.reduce((a,r)=>a+r.amount,0);
+  const bycat = {};
+  recs.forEach(r => { bycat[r.cat] = (bycat[r.cat]||0) + r.amount; });
+  const catsSorted = Object.entries(bycat).sort((a,b)=>b[1]-a[1]);
+
+  const wrap = document.createElement('div'); wrap.className = 'donut-wrap';
+  wrap.innerHTML = `
+    <div class="donut-title">${chartTabActive==='expense'?'總支出':'總收入'}</div>
+    <div class="donut-amount">${fmt(total)}</div>
+    <div class="donut-container">
+      <canvas id="donut-canvas" width="200" height="200"></canvas>
+      <div class="donut-center">
+        <div class="donut-center-label">${chartTabActive==='expense'?'總支出':'總收入'}</div>
+        <div class="donut-center-val">${fmt(total)}</div>
+      </div>
+    </div>`;
+  container.appendChild(wrap);
+
+  if (donutChart) { donutChart.destroy(); donutChart = null; }
+  if (catsSorted.length === 0) {
+    wrap.insertAdjacentHTML('beforeend','<div style="color:var(--text-sub);font-size:13px;margin-top:12px">本月無記錄</div>');
+    return;
+  }
+
+  const allCats = [...CATS.expense,...CATS.income,...CATS.transfer];
+  const labels = catsSorted.map(([id]) => allCats.find(c=>c.id===id)?.name||id);
+  const vals = catsSorted.map(([,v])=>v);
+  const colors = catsSorted.map((_,i)=>CAT_COLORS[i%CAT_COLORS.length]);
+
+  setTimeout(() => {
+    const ctx = document.getElementById('donut-canvas');
+    if (!ctx) return;
+    donutChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data: vals, backgroundColor: colors, borderWidth: 2, borderColor: '#fff', hoverOffset: 8 }] },
+      options: { cutout:'62%', plugins:{ legend:{display:false}, tooltip:{callbacks:{label:c=>`${c.label}: ${fmt(c.raw)} (${Math.round(c.raw/total*100)}%)`}}}, animation:{duration:500} }
+    });
+  }, 50);
+
+  const list = document.createElement('div'); list.className='cat-list';
+  catsSorted.forEach(([id,val],i) => {
+    const cat = allCats.find(c=>c.id===id)||{emoji:'💰',name:id};
+    const pct = total ? Math.round(val/total*100) : 0;
+    const item = document.createElement('div'); item.className='cat-list-item';
+    item.innerHTML = `<div class="cat-list-icon">${cat.emoji}</div><div class="cat-list-name">${cat.name}</div><div class="cat-list-pct">${pct}%</div><div class="cat-list-amt">${fmt(val)}</div>`;
+    list.appendChild(item);
+  });
+  container.appendChild(list);
+}
+
+function renderTrendChart(container) {
+  const recs = getMonthRecords(currentMonth);
+  const [y,m] = currentMonth.split('-').map(Number);
+  const daysInMonth = new Date(y,m,0).getDate();
+
+  // daily net
+  const daily = {};
+  for (let d=1;d<=daysInMonth;d++) daily[d]=0;
+  recs.forEach(r => {
+    const d = parseInt(r.date.split('-')[2]);
+    if (r.type==='income') daily[d]+=r.amount;
+    else if (r.type==='expense') daily[d]-=r.amount;
+  });
+
+  // cumulative
+  let cum = 0; const cumData = [];
+  for (let d=1;d<=daysInMonth;d++) { cum+=daily[d]; cumData.push({x:d,y:cum}); }
+
+  const wrap = document.createElement('div'); wrap.className='trend-wrap';
+  wrap.innerHTML = '<div class="trend-title">淨資產趨勢</div><div class="trend-canvas-wrap"><canvas id="trend-canvas"></canvas></div>';
+  container.appendChild(wrap);
+
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  setTimeout(() => {
+    const ctx = document.getElementById('trend-canvas');
+    if (!ctx) return;
+    trendChart = new Chart(ctx, {
+      type:'line',
+      data:{datasets:[{data:cumData,borderColor:'#4CAF50',backgroundColor:'rgba(76,175,80,0.12)',fill:true,tension:0.4,pointRadius:3,pointBackgroundColor:'#4CAF50',borderWidth:2.5}]},
+      options:{responsive:true,maintainAspectRatio:false,scales:{x:{type:'linear',min:1,max:daysInMonth,ticks:{maxTicksLimit:6,callback:v=>`${m}/${v}`},grid:{color:'rgba(240,98,146,0.1)'}},y:{ticks:{callback:v=>v>=1000?`${(v/1000).toFixed(0)}k`:v},grid:{color:'rgba(240,98,146,0.1)'}}},plugins:{legend:{display:false}},animation:{duration:500}}
+    });
+  }, 50);
+
+  // Balance list
+  const byDate = {};
+  recs.forEach(r => {
+    const d = r.date.split('-')[2];
+    byDate[d] = byDate[d]||{inc:0,exp:0};
+    if (r.type==='income') byDate[d].inc+=r.amount;
+    else if (r.type==='expense') byDate[d].exp+=r.amount;
+  });
+  const bList = document.createElement('div'); bList.className='balance-list';
+  let runBal = 0;
+  const entries = Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0]));
+  // total row
+  const totalNet = entries.reduce((a,[,v])=>a+(v.inc-v.exp),0);
+  bList.innerHTML = `<div class="balance-item"><span style="font-size:20px">∑</span><div class="balance-date"></div><div class="balance-flow positive" style="flex:1">總額</div><div class="balance-total">${fmt(totalNet)}</div></div>`;
+  entries.forEach(([d,v]) => {
+    const net = v.inc - v.exp;
+    const item = document.createElement('div'); item.className='balance-item';
+    item.innerHTML = `<span style="font-size:18px">📅</span><div class="balance-date">${parseInt(m)}/${parseInt(d)}</div><div class="balance-flow ${net>=0?'positive':'negative'}" style="flex:1">${net>=0?'+':''}${fmt(net)}</div><div class="balance-total" style="${net<0?'color:var(--red)':''}">${fmt(net)}</div>`;
+    bList.appendChild(item);
+  });
+  container.appendChild(bList);
+}
+
+// ── CALENDAR ──
+function renderCal() {
+  const container = document.getElementById('cal-content');
+  container.innerHTML = '';
+  const [y,m] = currentMonth.split('-').map(Number);
+  const firstDay = new Date(y,m-1,1).getDay();
+  const daysInMonth = new Date(y,m,0).getDate();
+  const today = new Date().toISOString().slice(0,10);
+
+  // build day-to-amounts map
+  const recs = getMonthRecords(currentMonth);
+  const dayMap = {};
+  recs.forEach(r => {
+    const d = r.date.split('-')[2];
+    dayMap[d] = dayMap[d]||{exp:0,inc:0};
+    if (r.type==='expense') dayMap[d].exp+=r.amount;
+    else if (r.type==='income') dayMap[d].inc+=r.amount;
+  });
+
+  const wrap = document.createElement('div'); wrap.className='cal-wrap';
+  const nav = document.createElement('div'); nav.className='cal-header';
+  nav.innerHTML = `<button onclick="changeMonth(-1)">‹</button><span>${getMonthLabel(currentMonth)}</span><button onclick="changeMonth(1)">›</button>`;
+  wrap.appendChild(nav);
+
+  const grid = document.createElement('div'); grid.className='cal-grid';
+  ['週日','週一','週二','週三','週四','週五','週六'].forEach(d => {
+    const el = document.createElement('div'); el.className='cal-dow'; el.textContent=d; grid.appendChild(el);
+  });
+
+  // empty cells before first day
+  for (let i=0;i<firstDay;i++) {
+    const el = document.createElement('div'); el.className='cal-day other-month'; grid.appendChild(el);
+  }
+
+  for (let d=1;d<=daysInMonth;d++) {
+    const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dow = new Date(dateStr).getDay();
+    const isToday = dateStr===today;
+    const el = document.createElement('div');
+    el.className = 'cal-day' + (isToday?' today':'') + (dow===0?' sun':dow===6?' sat':'');
+    const dn = document.createElement('div'); dn.className='day-num'; dn.textContent=d; el.appendChild(dn);
+    const dm = dayMap[String(d).padStart(2,'0')] || dayMap[String(d)];
+    if (dm) {
+      if (dm.exp>0) { const dd=document.createElement('div'); dd.className='day-dot'; dd.textContent=`-${dm.exp>=10000?Math.round(dm.exp/1000)+'k':dm.exp}`; el.appendChild(dd); }
+      if (dm.inc>0) { const dd=document.createElement('div'); dd.className='day-dot income'; dd.textContent=`+${dm.inc>=10000?Math.round(dm.inc/1000)+'k':dm.inc}`; el.appendChild(dd); }
+    }
+    el.onclick = () => scrollToDate(dateStr);
+    grid.appendChild(el);
+  }
+  wrap.appendChild(grid);
+
+  // summary
+  const totalExp = recs.filter(r=>r.type==='expense').reduce((a,r)=>a+r.amount,0);
+  const totalInc = recs.filter(r=>r.type==='income').reduce((a,r)=>a+r.amount,0);
+  const summary = document.createElement('div'); summary.className='cal-summary';
+  summary.innerHTML = `
+    <div class="cal-sum-item"><div class="cal-sum-label">總額</div><div class="cal-sum-val ${totalInc-totalExp>=0?'green':'red'}">${fmt(totalInc-totalExp)}</div></div>
+    <div class="cal-sum-item"><div class="cal-sum-label">支出</div><div class="cal-sum-val red">${fmt(totalExp)}</div></div>
+    <div class="cal-sum-item"><div class="cal-sum-label">收入</div><div class="cal-sum-val green">${fmt(totalInc)}</div></div>`;
+  wrap.appendChild(summary);
+  container.appendChild(wrap);
+
+  // tx list below calendar
+  const recs2 = getMonthRecords(currentMonth);
+  const byDate = {};
+  recs2.forEach(r => { (byDate[r.date]=byDate[r.date]||[]).push(r); });
+  Object.keys(byDate).sort((a,b)=>b.localeCompare(a)).forEach(date => {
+    const items = byDate[date];
+    const [,dd,d2] = date.split('-');
+    const wd=['週日','週一','週二','週三','週四','週五','週六'][new Date(date).getDay()];
+    const dayExp=items.filter(r=>r.type==='expense').reduce((a,r)=>a+r.amount,0);
+    const grp=document.createElement('div'); grp.className='date-group'; grp.id='date-'+date;
+    grp.innerHTML=`<div class="date-header"><span class="date-text">${parseInt(dd)}/${parseInt(d2)}（${wd}）</span><span class="date-sum">支出:${fmtAbs(dayExp)}</span></div>`;
+    const allCats=[...CATS.expense,...CATS.income,...CATS.transfer];
+    items.forEach(r=>{
+      const cat=allCats.find(c=>c.id===r.cat)||{emoji:'💰',name:r.cat};
+      const div=document.createElement('div'); div.className='tx-item';
+      div.innerHTML=`<div class="tx-icon">${cat.emoji}</div><div class="tx-info"><div class="tx-name">${cat.name}</div><div class="tx-sub">${r.note||'自己'}</div></div><div class="tx-right"><div class="tx-amount ${r.type}">${r.type==='expense'?'-':'+'}${fmtAbs(r.amount)}</div></div>`;
+      grp.appendChild(div);
+    });
+    container.appendChild(grp);
+  });
+}
+
+function scrollToDate(dateStr) {
+  const el = document.getElementById('date-'+dateStr);
+  if (el) el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+// ── INIT ──
+renderHome();
+document.getElementById('month-label').textContent = getMonthLabel(currentMonth);
+document.getElementById('chart-month-label').textContent = getMonthLabel(currentMonth);
+
+// close modal on overlay click
+document.getElementById('add-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeAddModal();
+});
+
+// SW registration for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
